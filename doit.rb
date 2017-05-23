@@ -47,7 +47,7 @@ end
 
 class PriceLevel < Base
   attr_accessor :name
-  attr_accessor :order_type, :day_part
+  attr_accessor :order_type, :day_part, :location
 end
 
 class DayPart < Base
@@ -62,8 +62,8 @@ end
 
 $brand = Brand.new(name: 'Cafe Bangarang')
 $brand.locations = [
-  Location.new(name: 'FiDi'),
-  $location = Location.new(name: 'SoHo'),
+  $fidi = Location.new(name: 'FiDi'),
+  $soho = Location.new(name: 'SoHo'),
 ]
 $brand.menu_items = [
   $spicy_reuben = MenuItem.new(name: 'Spicy Reuben'),
@@ -79,9 +79,9 @@ $brand.locations.first.day_parts = $brand.locations.last.day_parts = [
   $dinner = DayPart.new(name: 'Dinner', start_time: 17*3600, end_time: 11*3600),
 ]
 $brand.price_levels = [
-  $regular = PriceLevel.new(name: 'Regular', order_type: $dine_in_ot),
-  $happy_hour = PriceLevel.new(name: 'Happy Hour', order_type: $dine_in_ot, day_part: $dinner),
-  $delivery = PriceLevel.new(name: 'Delivery', order_type: $delivery_ot),
+  $regular = PriceLevel.new(name: 'Regular', order_type: $dine_in_ot, location: $fidi),
+  $happy_hour = PriceLevel.new(name: 'Happy Hour', order_type: $dine_in_ot, day_part: $dinner, location: $fidi),
+  $delivery = PriceLevel.new(name: 'Delivery', order_type: $delivery_ot, location: $fidi),
 ]
 $spicy_reuben.price_assignments = [
   PriceAssignment.new(price_level: $regular, price: 4),
@@ -108,10 +108,12 @@ class PriceService
   
   def current_price_level(menu_item, location, order_type)
     pa = menu_item.price_assignments.detect do |pa|
+      pa.price_level.location == location &&
       pa.price_level.order_type == order_type &&
       pa.price_level.day_part == current_day_part(location)
     end
     pa ||= menu_item.price_assignments.detect do |pa|
+      pa.price_level.location == location &&
       pa.price_level.order_type == order_type
     end
     pa && pa.price_level
@@ -129,21 +131,28 @@ describe PriceService do
   
   it 'does happy hour' do
     Timecop.freeze(Time.new(2010, 10, 10, 1)) do
-      price_service.current_price_level($spicy_reuben, $location, $dine_in_ot).
+      price_service.current_price_level($spicy_reuben, $fidi, $dine_in_ot).
         should == $happy_hour
     end
   end
   
   it 'does dine in' do
     Timecop.freeze(Time.new(2010, 10, 10, 10)) do
-      price_service.current_price_level($spicy_reuben, $location, $dine_in_ot).
+      price_service.current_price_level($spicy_reuben, $fidi, $dine_in_ot).
         should == $regular
     end
   end
   
   it 'is nil for delivery' do
     Timecop.freeze(Time.new(2010, 10, 10, 1)) do
-      price_service.current_price_level($spicy_reuben, $location, $delivery_ot).
+      price_service.current_price_level($spicy_reuben, $fidi, $delivery_ot).
+        should be_nil
+    end
+  end
+  
+  it 'is nil for soho' do
+    Timecop.freeze(Time.new(2010, 10, 10, 1)) do
+      price_service.current_price_level($spicy_reuben, $soho, $dine_in_ot).
         should be_nil
     end
   end
